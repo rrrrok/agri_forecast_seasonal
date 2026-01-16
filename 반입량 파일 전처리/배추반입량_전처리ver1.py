@@ -1,8 +1,11 @@
 import pandas as pd
 
+import os
+
 # 1. 파일 불러오기
 # 파일 인코딩 문제 발생 시 encoding='cp949' 또는 'utf-8-sig'를 시도해보세요.
-file_path = '배추반입량_전처리전.csv'
+script_dir = os.path.dirname(os.path.abspath(__file__))
+file_path = os.path.join(script_dir, '배추반입량_전처리전.csv')
 df = pd.read_csv(file_path)
 
 # 2. 제외할 컬럼 리스트 정의
@@ -17,7 +20,7 @@ if 'DATE' in df.columns:
     df = df.sort_values(by='DATE', ascending=True)
 
 # 4. 새로운 CSV 파일로 저장
-output_path = '배추반입량_전처리ver1.csv'
+output_path = os.path.join(script_dir, '배추반입량_전처리ver1.csv')
 df.to_csv(output_path, index=False, encoding='utf-8-sig')
 
 print(f"파일 변환 완료: {output_path}")

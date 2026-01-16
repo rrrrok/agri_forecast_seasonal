@@ -1,16 +1,19 @@
 import pandas as pd
 import numpy as np
 
+import os
+
 # 1. 파일 불러오기
-file_path = '배추반입량_전처리ver1.csv'
+script_dir = os.path.dirname(os.path.abspath(__file__))
+file_path = os.path.join(script_dir, '배추반입량_전처리ver1.csv')
 df = pd.read_csv(file_path)
 
 # 2. DATE 형식 변환 및 정렬
 df['DATE'] = pd.to_datetime(df['DATE'])
 df = df.sort_values('DATE').drop_duplicates('DATE')
 
-# 3. 전체 날짜 범위 생성 (2018-01-01 ~ 2024-12-31)
-full_range = pd.date_range(start='2018-01-01', end='2024-12-31', freq='D')
+# 3. 전체 날짜 범위 생성 (2018-01-01 ~ 2025-12-31)
+full_range = pd.date_range(start='2018-01-01', end='2025-12-31', freq='D')
 full_df = pd.DataFrame({'DATE': full_range})
 
 # 4. 기존 데이터와 병합
@@ -38,7 +41,7 @@ cols_to_fix = ['총반입량', '전일', '전년']
 df[cols_to_fix] = df[cols_to_fix].round(0).astype(int)
 
 # 10. 결과 저장
-output_path = '../배추일별반입량_전처리완료.csv'
+output_path = os.path.join(os.path.dirname(script_dir), '배추일별반입량_전처리완료.csv')
 df.to_csv(output_path, index=False, encoding='utf-8-sig')
 
 print(f"처리 완료: {output_path} (소수점 제거됨)")
