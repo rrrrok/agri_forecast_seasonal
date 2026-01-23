@@ -1,23 +1,26 @@
 import pandas as pd
 import numpy as np
 import xgboost as xgb
-import optuna
+# import optuna  <-- Optuna 제거
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import matplotlib.pyplot as plt
 import os
 from matplotlib import rc
 
 # 1. 환경 설정
-rc('font', family='Malgun Gothic')
+# (참고: 실행 환경에 따라 폰트 설정이 다를 수 있습니다. Mac은 'AppleGothic', 리눅스는 설치된 한글 폰트 사용)
+rc('font', family='Malgun Gothic') 
 plt.rcParams['axes.unicode_minus'] = False
 current_path = os.path.dirname(os.path.abspath(__file__))
 
 # 2. 데이터 로드
+# 파일이 같은 폴더에 있어야 합니다.
 df = pd.read_csv(os.path.join(current_path, '배추_가격_반입량_통합본.csv'))
 df['DATE'] = pd.to_datetime(df['DATE'])
 df = df.sort_values('DATE')
 
 # 3. 데이터 전처리 (Target & Features)
+# 7일 뒤 가격을 예측
 df['Target_7days'] = df['가격_평균'].shift(-7)
 
 df['Month'] = df['DATE'].dt.month
@@ -45,60 +48,46 @@ X_test, y_test = test[features], test['Target_7days']
 print(f"학습 데이터: {X_train.shape} (2018-2024)")
 print(f"테스트 데이터: {X_test.shape} (2025)")
 
-# 5. Optuna Objective 함수
-# 학습 데이터로 학습 후 '테스트 데이터(2025)'로 채점
-def objective(trial):
-    param = {
-        'n_estimators': trial.suggest_int('n_estimators', 500, 3000),
-        'learning_rate': trial.suggest_float('learning_rate', 0.005, 0.1, log=True),
-        'max_depth': trial.suggest_int('max_depth', 3, 12),
-        'min_child_weight': trial.suggest_int('min_child_weight', 1, 10),
-        'subsample': trial.suggest_float('subsample', 0.5, 1.0),
-        'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0),
-        'gamma': trial.suggest_float('gamma', 0.0, 0.5),
-        'random_state': 42,
-        'n_jobs': -1
-    }
-    
-    # 전체 학습 데이터로 모델 생성
-    model = xgb.XGBRegressor(**param)
-    model.fit(X_train, y_train, verbose=False)
-    
-    # 2025년 데이터로 예측 및 평가 (여기가 바뀜!)
-    preds = model.predict(X_test)
-    r2 = r2_score(y_test, preds)
-    
-    return r2 # 2025년 R^2 점수 반환
+# 5. 모델 파라미터 설정 (Optuna 대신 수동 설정)
+# 일반적인 시계열/회귀 문제에서 성능이 좋고 안정적인 추천 파라미터입니다.
+best_params = {
+    'n_estimators': 1000,       # 트리의 개수 (너무 적으면 과소적합, 많으면 시간 오래 걸림)
+    'learning_rate': 0.03,      # 학습률 (낮을수록 정교하지만 n_estimators를 늘려야 함)
+    'max_depth': 6,             # 트리의 깊이 (보통 5~8 사이 사용)
+    'min_child_weight': 1,
+    'subsample': 0.8,           # 데이터 샘플링 비율 (과적합 방지)
+    'colsample_bytree': 0.8,    # 컬럼 샘플링 비율 (과적합 방지)
+    'gamma': 0.1,               # 리프 노드를 추가로 나눌지 결정하는 최소 손실 감소값
+    'random_state': 42,
+    'n_jobs': -1                # 가능한 모든 CPU 코어 사용
+}
 
-# 6. 최적화 실행
-print("\n--- 2025년 테스트 데이터에 최적화된 파라미터 탐색 중... ---")
-study = optuna.create_study(direction='maximize')
-study.optimize(objective, n_trials=50) # 50번 시도
+print(f"\n✅ 적용된 추천 파라미터:\n{best_params}")
 
-print(f"\n✅ 2025년 맞춤형 최고의 파라미터:\n{study.best_params}")
-print(f"✅ 2025년 최고 R^2 점수: {study.best_value:.4f}")
-
-# 7. 최적 결과로 최종 학습 및 시각화
-best_params = study.best_params
-best_params['random_state'] = 42
-best_params['n_jobs'] = -1
-
+# 6. 모델 학습 및 평가
 final_model = xgb.XGBRegressor(**best_params)
 final_model.fit(X_train, y_train)
+
+# 예측
 preds = final_model.predict(X_test)
 
+# 평가 지표 계산
 rmse = np.sqrt(mean_squared_error(y_test, preds))
 r2 = r2_score(y_test, preds)
 
-print(f"\n=== [2025년 타겟 최적화 최종 결과] ===")
+print(f"\n=== [2025년 타겟 최종 결과 (Manual Parameters)] ===")
 print(f"RMSE: {rmse:.2f}원")
 print(f"R^2 Score: {r2:.4f}")
 
+# 7. 시각화
 plt.figure(figsize=(15, 6))
 plt.plot(test['DATE'], y_test, label='실제 가격', color='blue', alpha=0.5)
-plt.plot(test['DATE'], preds, label=f'예측 가격 (Maximized for 2025)', color='red', linestyle='--', linewidth=2)
-plt.title(f'2025년 배추 가격 예측 (Test Set Optimization) - R^2: {r2:.4f}')
+plt.plot(test['DATE'], preds, label=f'예측 가격 (Recommended Params)', color='red', linestyle='--', linewidth=2)
+plt.title(f'2025년 배추 가격 예측 (Manual Tuning) - R^2: {r2:.4f}')
 plt.legend()
 plt.grid(True, alpha=0.3)
-plt.savefig(os.path.join(current_path, 'xgboost_except_weather_result.png'))
-print(f"결과 그래프 저장 완료: {os.path.join(current_path, 'xgboost_except_weather_result.png')}")
+
+save_path = os.path.join(current_path, 'xgboost_manual_result.png')
+plt.savefig(save_path)
+print(f"결과 그래프 저장 완료: {save_path}")
+plt.show()
