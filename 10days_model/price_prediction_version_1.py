@@ -214,7 +214,7 @@ def save_prediction_csv(test_df, y_test, predictions):
 
 def main():
     print("="*70)
-    print("배추 가격 예측 모델 Ver.1 (기상 변수 추가)")
+    print("배추 가격 예측 모델 Ver.1 (탐색한 최적의 누적 n순 + 시차 반영한 기상 변수 사용)")
     print("="*70)
     
     # 1. 데이터 준비
